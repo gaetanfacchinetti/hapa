@@ -12,3 +12,11 @@ from .halo import (
     Halo,
     TruncatedHalo,
 )
+
+from .power_spectrum import (
+    mass_vs_lagrangian_radius, 
+)
+
+from .cosmology import (
+    Cosmology,
+)

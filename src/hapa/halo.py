@@ -7,13 +7,11 @@ import astropy.cosmology
 import astropy.constants as const
 import astropy.units as units
 
+from . import params
+
 from functools import partial
 
-
 from abc import abstractmethod
-
-xmin_int = 1e-20
-xmax_int = 1e+4
 
 
 class HaloProfile() :
@@ -44,8 +42,8 @@ class HaloProfile() :
         """
 
         # We interpolate on a grid with 20 points per decades (at least)
-        n_points = np.max([20*int(np.log10(xmax_int/xmin_int)), 150])
-        _x_arr = np.logspace(np.log10(xmin_int), np.log10(xmax_int), n_points)
+        n_points = np.max([20*int(np.log10(params.XMAX_INT/params.XMIN_INT)), 150])
+        _x_arr = np.logspace(np.log10(params.XMIN_INT), np.log10(params.XMAX_INT), n_points)
 
         _mass : float = 0
         _mass_arr = np.array([0])
@@ -82,7 +80,7 @@ class HaloProfile() :
             return self.density_profile(_y) / _y * self.density_profile(_z) * (_z**3)
 
         def __boundary_min(Y):
-            return np.log(xmin_int)
+            return np.log(params.XMIN_INT)
 
         def __boundary_max(Y):
             return Y #np.log(np.exp(Y))
@@ -114,7 +112,7 @@ class HaloProfile() :
             return 1. / _y *  self.density_profile(_z) * (_z**3)
 
         def __boundary_min(Y):
-            return np.log(self.xmin_int)
+            return np.log(self.params.XMIN_INT)
 
         def __boundary_max(Y):
             return Y #np.log(np.exp(Y))
@@ -135,9 +133,7 @@ class HaloProfile() :
             if l_angular == 1:
                 return 6*self.density_profile(_x)*(self.mass_profile(_x)**2)/(_x**2)*_x
         
-        return integrate.quad(__integrand, np.log(xmin_int), np.log(x_delta), epsrel=1e-3)[0]
-
-
+        return integrate.quad(__integrand, np.log(params.XMIN_INT), np.log(x_delta), epsrel=1e-3)[0]
 
 
 
@@ -145,7 +141,7 @@ class HaloProfile() :
 ## Generic functions in the module to convert every quantities together
 
 def c_delta_from_rhos(rhos, delta, rho_ref, mass_profile):
-    return optimize.bisect(_solve_for_concentration, 1.1*xmin_int, 0.9*xmax_int, args = (rhos, delta, rho_ref, mass_profile))
+    return optimize.bisect(_solve_for_concentration, 1.1*params.XMIN_INT, 0.9*params.XMAX_INT, args = (rhos, delta, rho_ref, mass_profile))
 
 def _solve_for_concentration(c, rhos, delta, rho_ref, mass_profile):
     return c**3/mass_profile(c) - 3 * rhos.to('M_sun/kpc^3') / delta / rho_ref.to('M_sun/kpc^3')
@@ -175,8 +171,6 @@ def r_delta_from_rhos_and_rs(rhos, rs, delta, rho_ref, mass_profile):
     m_delta = m_delta_from_rhos_and_rs(rhos, rs, delta, rho_ref, mass_profile)
     return (3*m_delta.to('M_sun')/(4*np.pi * delta * rho_ref.to('M_sun/kpc^3')))**(1./3.)
 
-
-DEFAULT_COSMO = astropy.cosmology.Planck18
 
 
 class ABGHaloProfile(HaloProfile):
@@ -293,7 +287,7 @@ class Halo():
 
         # In case we need thes values we load them
         if rhos is None or rs is None:
-            _cosmo            = kwargs.get('cosmo', DEFAULT_COSMO)
+            _cosmo            = kwargs.get('cosmo', params.DEFAULT_COSMO)
             self._z           = kwargs.get('z', 0)
             self._is_critical = kwargs.get('is_critical', True)
             self._delta       = kwargs.get('delta', 200)
@@ -322,7 +316,7 @@ class Halo():
         return self._halo_profile
 
 
-    def c_delta(self, z= 0, delta=200, is_critical = True, cosmo = DEFAULT_COSMO) :
+    def c_delta(self, z= 0, delta=200, is_critical = True, cosmo = params.DEFAULT_COSMO) :
         if (self._z is not None and self._z != z) \
             or (self._delta is not None and self._delta != delta) \
             or (self._is_critical is not None and self._is_critical != is_critical):
@@ -330,7 +324,7 @@ class Halo():
         _rho_ref = rho_ref(cosmo, z, is_critical)
         return c_delta_from_rhos(self.rhos, delta, _rho_ref, self.halo_profile.mass_profile)
 
-    def m_delta(self, z=0, delta=200, is_critical = True, cosmo = DEFAULT_COSMO) :
+    def m_delta(self, z=0, delta=200, is_critical = True, cosmo = params.DEFAULT_COSMO) :
         if (self._z is not None and self._z != z) \
             or (self._delta is not None and self._delta != delta) \
             or (self._is_critical is not None and self._is_critical != is_critical):
@@ -338,7 +332,7 @@ class Halo():
         _rho_ref = rho_ref(cosmo, z, is_critical)
         return m_delta_from_rhos_and_rs(self.rhos, self.rs, delta, _rho_ref, self.halo_profile.mass_profile)
 
-    def r_delta(self, z=0, delta=200, is_critical = True, cosmo = DEFAULT_COSMO) :
+    def r_delta(self, z=0, delta=200, is_critical = True, cosmo = params.DEFAULT_COSMO) :
         if (self._z is not None and self._z != z) \
             or (self._delta is not None and self._delta != delta) \
             or (self._is_critical is not None and self._is_critical != is_critical):
@@ -362,7 +356,7 @@ class Halo():
     def enclosed_mass(self, r:float) -> float:
         return 4*np.pi * self.rhos *self.rs **3 * self.mass_profile(r/self.rs)
 
-    def one_halo_boost(self, l_angular : int = 0, z: float = 0, delta: float = 200, is_critical: bool = True, cosmo = DEFAULT_COSMO) -> float:
+    def one_halo_boost(self, l_angular : int = 0, z: float = 0, delta: float = 200, is_critical: bool = True, cosmo = params.DEFAULT_COSMO) -> float:
         """
         Boost factor due to one halo (dimensionless)
         """
@@ -383,7 +377,7 @@ class TruncatedHalo(Halo):
 
         self._init_halo_profile = halo_profile
 
-        _cosmo     : float = kwargs.get('cosmo', DEFAULT_COSMO)
+        _cosmo     : float = kwargs.get('cosmo', params.DEFAULT_COSMO)
         _sigv      : float = kwargs.get('sigv', 3e-26 * units.cm**3/units.s)
         _mchi      : float = kwargs.get('mchi', 1 * units.TeV / const.c**2)
         _zf        : float = kwargs.get('zf', 1000)
@@ -443,7 +437,7 @@ class TruncatedHalo(Halo):
 
 
     def _x_turn_func(self, rho_turn: float, rhos = None, c_delta = None, delta: float = None, rho_ref: float = None) -> float :
-        return optimize.bisect(self.__solve_for_x_turn, 1.1*xmin_int, 0.9*xmax_int, args=(rho_turn, rhos, c_delta, delta, rho_ref))
+        return optimize.bisect(self.__solve_for_x_turn, 1.1*params.XMIN_INT, 0.9*params.XMAX_INT, args=(rho_turn, rhos, c_delta, delta, rho_ref))
 
 
     def __solve_for_x_turn(self, x : float, rho_turn: float, rhos: float = None, c_delta: float = None, delta: float = None, rho_ref: float = None) -> float:
