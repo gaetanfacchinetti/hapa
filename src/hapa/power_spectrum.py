@@ -2,19 +2,22 @@ import numpy as np
 
 from . import cosmology as cosmo
 from . import params
+from .units import Quantity
 
 
-def mass_vs_lagrangian_radius(radius_MPC: float, volume_factor = 4*np.pi**2, cosmo = cosmo.PLANCK18):
+def mass_vs_lagrangian_radius(radius: Quantity, volume_factor = 4*np.pi**2, cosmo = cosmo.PLANCK18):
     """
-    # Mass vs Lagrangian radius in MPC / Result in MSUN
+    # Mass vs Lagrangian radius
     """
-    return cosmo.rho_matter_average_0_MSUN_MPC3 * volume_factor * pow(radius_MPC, 3)
+    rho_average = cosmo.rho_matter_average_0
+    return Quantity(rho_average.value * volume_factor * radius.value**3, rho_average.unit * radius.unit**3)
+
 
 def lagrangian_radius_vs_mass(mass_MSUN: float, volume_factor = 4*np.pi**2, cosmo = cosmo.PLANCK18):
     """
     # Lagrangian radius vs mass in MSUN / Result in MPC
     """
-    return (mass_MSUN/cosmo.rho_matter_average_0_MSUN_MPC3/volume_factor)**(1./3.)
+    return (mass_MSUN/cosmo.rho_matter_average_0/volume_factor)**(1./3.)
 
 
 

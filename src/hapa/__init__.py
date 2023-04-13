@@ -18,5 +18,10 @@ from .power_spectrum import (
 )
 
 from .cosmology import (
-    Cosmology,
+    BackgroundCosmology,
 )
+
+from .units import (
+    Quantity,
+)
+
