@@ -1,6 +1,5 @@
 import numpy as np
 from . import units
-from .units import Quantity
 
 class BackgroundCosmology:
 
@@ -68,7 +67,7 @@ class BackgroundCosmology:
     
     @property
     def hubble_constant(self):
-        return Quantity(100*self._hubble_parameter, units.km / units.s / units.Mpc)
+        return 100*self._hubble_parameter
     
     @property
     def hubble_parameter(self):
@@ -76,22 +75,24 @@ class BackgroundCosmology:
     
     @property
     def critical_density_0(self):
-        return Quantity(self.hubble_constant.value * self._hubble2_to_critical_density_MSUN_MPC3, units.Msun/units.Mpc**3)
+        _hubble_constant = self.hubble_constant
+        return _hubble_constant * self._hubble2_to_critical_density_MSUN_MPC3
 
     @property
     def rho_matter_average_0(self):
-        return Quantity(self.omega_matter_0 * self.critical_density_0.value,  self.critical_density_0.unit)
-
+        _critical_density_0 = self.critical_density_0
+        return self.omega_matter_0 * _critical_density_0
 
     def E(self, z):
         return np.sqrt((self._Omh2_0*pow(1+z,3) + self._Orh2_0*pow(1+z,4) + self._Olh2_0)/(self._h**2))
     
-    def hubble_rate(self, z: float) -> Quantity:
+    def hubble_rate(self, z: float):
         _E2h2 = self._Omh2_0*pow(1+z,3) + self._Orh2_0*pow(1+z,4) + self._Olh2_0
-        return Quantity(100.*np.sqrt(_E2h2), units.km / units.s / units.Mpc) 
+        return 100.*np.sqrt(_E2h2)
     
-    def critical_density_MSUN_MPC3(self, z):
-        return (self.hubble_rate(z).value**2 * self._hubble2_to_critical_density_MSUN_MPC3,  units.Msun/units.Mpc**3)
+    def critical_density(self, z):
+        _hubble_rate = self.hubble_rate(z)
+        return _hubble_rate**2 * self._hubble2_to_critical_density_MSUN_MPC3
 
 
 

@@ -1,4 +1,9 @@
 import numpy as np
+from multipledispatch import dispatch
+from numbers import Number
+from enum import Enum
+from enum import auto
+from fractions import Fraction
 
 # fundamental constants (in the SI units)
 G_NEWTON: float    = 6.67408e-11; # [m^3.kg^-1.s^-2]
@@ -38,7 +43,18 @@ GEV_TO_K : float = 1.e+9*EV_TO_K
 K_TO_GEV : float = 1./GEV_TO_K
 
 
+class Dimension(Enum):
+    LENGTH = auto()
+    MASS   = auto()
+    TIME   = auto()
+    TEMPERATURE = auto()
+    ENERGY = auto()
 
+
+_UNITS_KEYS = np.array(['nm', 'mm', 'cm', 'm', 'km', 'pc', 'kpc', 'Mpc', 'g', 'kg', 'Msun', 's', 'yr', 'Myr', 'Gyr', 'K', 'eV', 'keV', 'MeV', 'GeV', 'TeV'])
+_UNIT_DIMENSION: tuple = (*([Dimension.LENGTH.value]*8), *([Dimension.MASS.value]*3), *([Dimension.TIME.value]*4), *([Dimension.TEMPERATURE.value]*1), *([Dimension.ENERGY.value]*7))
+_UNITS_KEY_TO_POS: dict = dict(nm=0, mm=1, cm=2, m=3, km=4, pc=5, kpc=6, Mpc=7, g=8, kg=9, Msun=10, s=11, yr=12, Myr=13, Gyr=14, eV=15, keV=16, MeV=17, GeV=18, TeV=19)
+_UNITS_CONVERT: tuple = (1e-9, 1e-3, 1e-2, 1, 1e+3, 1e-3*KPC_TO_M, KPC_TO_M, 1e+3*KPC_TO_M, 1e-3, 1, MSUN_TO_KG, 1, YR_TO_S, 1e+6*YR_TO_S, 1e+9*YR_TO_S, 1, 1e-9, 1e-6, 1e-3, 1, 1e+3, J_TO_GEV, 1e+3*J_TO_GEV)
 
 _LENGTHS_KEYS: tuple = ('nm', 'mm', 'cm', 'm', 'km', 'pc', 'kpc', 'Mpc')
 _LENGTHS_KEY_TO_POS: dict = dict(nm=0, mm=1, cm=2, m=3, km=4, pc=5, kpc=6, Mpc=7)
@@ -61,65 +77,82 @@ _ENERGIES_KEY_TO_POS: dict = dict(eV=0, keV=1, MeV=2, GeV=3, TeV=4, J=5, kJ=6)
 _CONVERT_ENERGIES: tuple = (1e-9, 1e-6, 1e-3, 1, 1e+3, J_TO_GEV, 1e+3*J_TO_GEV)
 
 
+_EMPTY_ARRAY_0 = np.zeros(len(_UNITS_KEYS), dtype = np.int8)
+_EMPTY_ARRAY_1 = np.ones(len(_UNITS_KEYS), dtype = np.int8)
 
 class Unit:
 
-    def __init__(self, **kwargs):  
+    def __init__(self, numerator = _EMPTY_ARRAY_0, denominator = _EMPTY_ARRAY_1):  
 
-        # Define the different units one can have trhough arrays
-        self._lengths        = np.zeros(len(_LENGTHS_KEYS), dtype=np.float64)
-        self._times          = np.zeros(len(_TIMES_KEYS),   dtype=np.float64)
-        self._masses         = np.zeros(len(_MASSES_KEYS),  dtype=np.float64)
-        self._temperatures   = np.zeros(len(_TEMPERATURES_KEYS),  dtype=np.float64)
-        self._energies       = np.zeros(len(_ENERGIES_KEYS),      dtype=np.float64)
+        # Define the different units one can have through arrays
+        _gcd = np.gcd(numerator, denominator)
+        self._numerator   = numerator//_gcd
+        self._denominator = denominator//_gcd
 
-        self._name = ''
-
-        for key in kwargs.keys():
-
-            if key in _LENGTHS_KEYS:
-                _ikey  = _LENGTHS_KEY_TO_POS[key]
-                self._lengths[_ikey] = kwargs.get(key)
-            elif key in _TIMES_KEYS:
-                _ikey  = _TIMES_KEY_TO_POS[key]
-                self._times[_ikey] = kwargs.get(key)
-            elif key in _MASSES_KEYS:
-                _ikey  = _MASSES_KEY_TO_POS[key]
-                self._masses[_ikey] = kwargs.get(key)
-            elif key in _TEMPERATURES_KEYS:
-                _ikey  = _TEMPERATURES_KEY_TO_POS[key]
-                self._temperatures[_ikey] = kwargs.get(key)
-            elif key in _ENERGIES_KEYS:
-                _ikey  = _ENERGIES_KEY_TO_POS[key]
-                self._energies[_ikey] = kwargs.get(key)
-            else:
-                raise ValueError('Unit not recognised')
-
-            _value = kwargs.get(key, 0)
-
-            if _value == 1:
-                self._name = self._name + key + '.'
-
-            if _value !=1:
-                _str_value = str(int(_value)) if _value.is_integer else _value
-            if _value < 0: 
-                self._name  = self._name + key + '^(' +  _str_value + ').'
-            if _value > 1: 
-                self._name  = self._name + key + '^' +  _str_value + '.'
-    
-        self._name = self._name[:-1]
-        
     @property
     def name(self):
-        return self._name
+
+        _num_val   = self._numerator[self._numerator != 0]
+        _denom_val = self._denominator[self._numerator != 0]
+        _unit_str  = _UNITS_KEYS[self._numerator != 0]
+
+        _name = ''
+        for inum, num in enumerate(_num_val):
+            _name += _unit_str[inum]
+            if num == 1:
+                _name += '.'
+            elif num > 0 and _denom_val[inum] == 1:
+                _name += '^' + str(num) + '.'
+            elif num > 0 and _denom_val[inum] != 1:
+                _name += '^(' + str(num) +'/'  + str(_denom_val[inum]) +').'
+            elif num < 0 and _denom_val[inum] == 1:
+                _name += '^(' + str(num) + ').'
+            elif num < 0 and _denom_val[inum] != 1:
+                _name += '^(' + str(num) +'/'  + str(_denom_val[inum]) +').'
+
+        _name = _name[:-1]
+
+        return _name
     
     def __str__(self):
-        return self._name
+        return self.name
 
     def __repr__(self):
-        return self._name
+        return self.name
+    
+    def __mul__(self, other):
+        return Unit(self._numerator + other._numerator, self._denominator + other._denominator)
+    
+    def __truediv__(self, other):
+        return Unit(self._numerator - other._numerator, self._denominator - other._denominator)
+    
+    def __rtruediv__(self, other):
+        if other == 1:
+            return Unit(-self._numerator, -self._denominator)
+        else: 
+            raise SyntaxError('No disivion between integer different than 1 and units')
 
-        
+    def __pow__(self, value): 
+        """
+        Be carefull, here value should always be defined as a Fraction object
+        """
+        return Unit(self._numerator * value.numerator,  self._numerator * value.denominator)
+    
+    def __eq__(self, other):
+        return np.all(self._numerator, other._numerator) and np.all(self._denominator, other._denominator) 
+
+    def reduced_unit(self):
+        return 
+
+s_array_num = np.zeros(len(_UNITS_KEYS), dtype = np.int8)
+s_array_num[_UNITS_KEY_TO_POS['s']] = 1
+s    = Unit(s_array_num)
+
+m_array_num = np.zeros(len(_UNITS_KEYS), dtype = np.int8)
+m_array_num[_UNITS_KEY_TO_POS['m']] = 1
+m    = Unit(m_array_num)
+
+"""
     def _set_args(cls, lengths: np.ndarray, times: np.ndarray, masses: np.ndarray, temperatures: np.ndarray, energies: np.ndarray) -> None:
 
         args_lengths: dict       = {_LENGTHS_KEYS[i]: lengths[i] for i in np.where(lengths != 0)[0]}
@@ -147,8 +180,10 @@ class Unit:
         new_masses        = self._masses  - other._masses
         new_temperatures  = self._temperatures  - other._temperatures
         new_energies      = self._energies  - other._energies
+        
+        _output = Unit(**self._set_args(new_lengths, new_times, new_masses, new_temperatures, new_energies))
 
-        return Unit(**self._set_args(new_lengths, new_times, new_masses, new_temperatures, new_energies))
+        return _output
 
     def __rtruediv__(self, value):
 
@@ -196,6 +231,20 @@ class Unit:
     
         return (_n_length, _n_mass, _n_times, _n_temp)
 
+    @property
+    def reduced_unit(self):
+
+        _n_length = np.sum(self._lengths)
+        _n_mass   = np.sum(self._masses)
+        _n_times  = np.sum(self._times)
+        _n_temp   = np.sum(self._temperatures)
+        _n_energy = np.sum(self._energies)
+
+        if np.all([_n_length, _n_mass, _n_times, _n_temp, _n_energy] == 0):
+            return _NO_UNIT
+        else:
+            return Unit(m = _n_length, kg = _n_mass, s = _n_times, K = _n_temp, GeV= _n_energy)
+
 
 # Define the basics building bloc units
 s    = Unit(s=1)
@@ -210,20 +259,15 @@ g    = Unit(g=1)
 kg   = Unit(kg=1)
 GeV  = Unit(GeV=1)
 
+_PREDEFINED_COMPOSED_UNITS = [Unit(m=1, s=-1), Unit(km=1, s=-1)]
 
 _NO_UNIT = Unit()
 
 class Quantity:
 
-    def __init__(self, value, unit):
+    def __init__(self, value, unit: Unit):
         self._value = value
         self._unit  = unit
-
-
-    @property
-    def reduced_unit(self):
-        _unit = self._unit
-        return Unit(m =  np.sum(_unit._lengths), kg = np.sum(_unit._masses), s =  np.sum(_unit._times), K = np.sum(_unit._temperatures), GeV= np.sum(_unit._energies))
 
     @property
     def reduced_value(self):
@@ -243,10 +287,11 @@ class Quantity:
         return self._value
     
     @property
-    def unit(self):
+    def unit(self) -> Unit:
         return self._unit
     
-    def convert(self, new_unit):
+    def convert(self, new_unit: Unit) -> None:
+
         _diff_unit = self._unit / new_unit
 
         if self._unit.powers_SI != new_unit.powers_SI:
@@ -271,30 +316,30 @@ class Quantity:
 
     def __mul__(self, other): 
         if isinstance(other, Quantity):
-            if self.reduced_unit * other.reduced_unit != _NO_UNIT:
-                new_value = self.value * other.value
-                return Quantity(new_value, self.unit * other.unit)
+            _new_unit = self.unit * other.unit
+            if _new_unit.reduced_unit is _NO_UNIT:    
+                return Quantity(self.value * other.value, _new_unit)
             else:
-                new_value = self.value * other.value
-                return new_value
+                return self.reduced_value * other.reduced_value
         else:
-            new_value = self.value * other
-            return Quantity(new_value, self.unit)
-    
+            return Quantity( self.value * other, self.unit)
+
+
     def __rmul__(self, other):
         if isinstance(other, Quantity):
-            if self.reduced_unit * other.reduced_unit != _NO_UNIT:
+            _new_unit = self.unit * other.unit
+            if _new_unit.reduced_unit is _NO_UNIT: 
                 return Quantity(self.value * other.value, self.unit * other.unit)
             else:
                 return self.reduced_value * other.reduced_value
         else:
-            new_value = self.value * other
-            return Quantity(new_value, self.unit)
-
+            return Quantity(self.value * other, self.unit)
+ 
     def __truediv__(self, other):
         if isinstance(other, Quantity):
-            if self.reduced_unit / other.reduced_unit != _NO_UNIT:
-                return Quantity(self.value / other.value, self.unit / other.unit)
+            _new_unit = self.unit / other.unit
+            if _new_unit.reduced_unit is _NO_UNIT:    
+                return Quantity(self.value / other.value, _new_unit)
             else:
                 return self.reduced_value / other.reduced_value
         else:
@@ -302,8 +347,9 @@ class Quantity:
         
     def __rtruediv__(self, other):
         if isinstance(other, Quantity):
-            if  other.reduced_unit / self.reduced_unit != _NO_UNIT:
-                return Quantity(other.value / self.value, other.unit / self.unit)
+            _new_unit =  other.unit / self.unit
+            if _new_unit.reduced_unit is _NO_UNIT:    
+                return Quantity(other.value / self.value, _new_unit)
             else:
                 return other.reduced_value / self.reduced_value 
         else:
@@ -320,4 +366,4 @@ class Quantity:
         assert (self.unit == other.unit)
         return Quantity(self.value - other.value, self.unit)
 
-  
+  """

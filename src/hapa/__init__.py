@@ -21,7 +21,4 @@ from .cosmology import (
     BackgroundCosmology,
 )
 
-from .units import (
-    Quantity,
-)
 
